@@ -9,7 +9,7 @@ import dash_table
 import pathlib
 from dash.exceptions import PreventUpdate
 from app import app
-
+#import tooltipdata
 
 # get relative data folder
 PATH = pathlib.Path(__file__).parent
@@ -50,6 +50,66 @@ dedup_player_dict_list = [dict(t) for t in {tuple(d.items()) for d in (pitchers_
 # Dictionary for time selection
 time_dict = [{'label': i, 'value' : i} for i in range(1871,2020)]
 
+# Description for batting tooltip
+batting_tooltip = {
+                    'yearID':['Year of Play'],
+                    'lgID':['Baseball League Id'],
+                    'Name':['Player Name'],
+                    'Team':['Team Name'],
+                    'PA':['Plate Appearances'],
+                    'AB':['At Bats'],
+                    'HR':['Home Runs'],
+                    'H':['Hits'],
+                    'X2B':['Second Bases'],
+                    'X3B':['Third Bases'],
+                    'RBI':['Runs Batted In'],
+                    'SB':['Stolen Bases'],
+                    'ISO':['Isolated Power'],
+                    'BABIP':['Batting Average on Balls in Play'],
+                    'AVG':['Number of Hits divided by At Bats'],
+                    'OBP': ['On Base Percentage'],
+                    'SLG': ['Slugging Percentage'],
+                    'wOBA': ['Weighted On Base Average'],
+                    'wRC.': ['Weighted Runs Created Plus'],
+                    'fWAR': ['Wins Above Replacement'],
+                    'CS': ['Caught Stealing'],
+                    'BB.': ['Base on Balls percentage'],
+                    'K.': ['Strikeout percentage'],
+                    'Off': ['Offense'],
+                    'Def':['Defense']
+}
+
+
+# Description for batting tooltip
+pitching_tooltip = {
+                    'yearID':['Year of Play'],
+                    'lgID':['Baseball League Id'],
+                    'Name':['Player Name'],
+                    'Team':['Team Name'],
+                    'PA':['Plate Appearances'],
+                    'AB':['At Bats'],
+                    'HR':['Home Runs'],
+                    'H':['Hits'],
+                    'X2B':['Second Bases'],
+                    'X3B':['Third Bases'],
+                    'RBI':['Runs Batted In'],
+                    'SB':['Stolen Bases'],
+                    'ISO':['Isolated Power'],
+                    'BABIP':['Batting Average on Balls in Play'],
+                    'AVG':['Number of Hits divided by At Bats'],
+                    'OBP': ['On Base Percentage'],
+                    'SLG': ['Slugging Percentage'],
+                    'wOBA': ['Weighted On Base Average'],
+                    'wRC.': ['Weighted Runs Created Plus'],
+                    'fWAR': ['Wins Above Replacement'],
+                    'CS': ['Caught Stealing'],
+                    'BB.': ['Base on Balls percentage'],
+                    'K.': ['Strikeout percentage'],
+                    'Off': ['Offense'],
+                    'Def':['Defense']
+}
+
+
 # Function to encode an image file
 def encode_image(image_file):
     encoded = base64.b64encode(open(image_file,'rb').read())
@@ -84,39 +144,7 @@ def year_range(player_name):
 
     return(min_year, max_year)
 
-# Function to highlight the maximum values in each column
-def highlight_max_min_row(df):
-    if "yearID" in df:
-        df['yearID'] = df['yearID'].astype(str)
-    else:
-        pass
-    df_numeric_columns = df.select_dtypes('number')
-    return ([
-        {
-            'if': {
-                'filter_query': '{{{}}} = {}'.format(col,df_numeric_columns[col].max()),
-                'column_id': col
-            },
-            'backgroundColor': '#3D9970',
-            'color': 'white'
-        }
-        # idxmax(axis=1) finds the max indices of each row
-        for col in df_numeric_columns.columns
-    ]
-    +
-    [
-        {
-            'if': {
-                'filter_query': '{{{}}} = {}'.format(col,df_numeric_columns[col].min()),
-                'column_id': col
-            },
-            'backgroundColor': '#d12e2e',
-            'color': 'white'
-        }
-        # idxmax(axis=1) finds the max indices of each row
-        for col in df_numeric_columns.columns
-    ]
-    )
+
 
 # Function to remove categorical colunmns
 def remove_categorical_columns(lst):
@@ -211,7 +239,7 @@ layout = html.Div(id = "player_details_content",children = [
                                                           sort_mode="multi",
                                                           style_table={'overflowX': 'auto'},
                                                           filter_action="native"
-                                                          ),
+                                                                            ),
                                                           html.Br(),
                                                           html.P("Batting Averages",id="batting_average_txt", style = {'font-weight':'bold'})], style= {'display': 'block'}),
                                                           html.Br(),
@@ -255,7 +283,6 @@ layout = html.Div(id = "player_details_content",children = [
                     ])
 
 #################### Player Details call backs start ###############################################
-
 
 # Setting up the call back for updating the end year drop down start
 @app.callback(Output("start_year","options"),[Input("player_name_det","value")])
@@ -315,7 +342,7 @@ def update_player_name(selection):
     return str(selection)
 
 
-
+#############Batting table header and tooltip (Start)##################
 # Setting up a call back for the batting table header
 @app.callback(Output('bat_table','columns'),
               [Input('submit_player_id','n_clicks')],
@@ -323,6 +350,15 @@ def update_player_name(selection):
 def update_table_header(n_clicks,value_list):
     return [{"name": i, "id": i} for i in value_list]
 
+# Setting up a call back for the batting table header tooltip
+@app.callback(Output('bat_table','tooltip_header'),
+              [Input('submit_player_id','n_clicks')],
+              [State('batting_metrics','value')])
+def table_header_tooltip(n_clicks,value_list):
+    return {val:batting_tooltip[val] for val in value_list}
+#############Batting table header and tooltip (End)##################
+
+#############Batting Average table header and tooltip (Start)##################
 # Setting up a callback for the batting average table headers
 @app.callback(Output('bat_avg_table','columns'),
              [Input('submit_player_id','n_clicks')],
@@ -331,6 +367,16 @@ def update_avg_batting_table_header(n_clicks, value_list):
     ## Excluding the three categorical columns from the average table
     lst = remove_categorical_columns(value_list)
     return [{"name": i, "id": i} for i in lst]
+
+@app.callback(Output('bat_avg_table','tooltip_header'),
+             [Input('submit_player_id','n_clicks')],
+             [State('batting_metrics','value')])
+def update_avg_batting_table_header(n_clicks, value_list):
+    ## Excluding the three categorical columns from the average table
+    lst = remove_categorical_columns(value_list)
+    return {val:batting_tooltip[val] for val in lst}
+
+#############Batting Average table header and tooltip (End)##################
 
 # setting up a callback for the pitching table header
 @app.callback(Output('pit_table','columns'),
@@ -359,18 +405,6 @@ def update_batter_table(n_clicks,start_year,end_year,bat_met,player_name):
     df = batters_df.loc[(batters_df['yearID'] >= int(start_year)) & (batters_df['yearID'] <= int(end_year)) & (batters_df['Name'] == player_name),bat_met]
     return(df.to_dict('records'))
 
-# formatting the data table (For Batters) (Maximum and Minimum)
-@app.callback(Output('bat_table','style_data_conditional'),
-             [Input('submit_player_id','n_clicks')],
-             [State('start_year','value'),
-             State('end_year','value'),
-             State('batting_metrics','value'),
-             State('player_name_det','value')])
-def update_table_formatting_max(n_clicks,start_year,end_year,bat_met,player_name):
-    lst = remove_categorical_columns(bat_met)
-    df = batters_df.loc[(batters_df['yearID'] >= int(start_year)) & (batters_df['yearID'] <= int(end_year)) & (batters_df['Name'] == player_name),lst]
-    style_dict = highlight_max_min_row(df)
-    return(style_dict)
 
 # Updating and populating the average table
 @app.callback(Output('bat_avg_table','data'),
@@ -409,17 +443,6 @@ def update_pitcher_table(n_clicks,start_year,end_year,bat_met,player_name):
     df = pitchers_df.loc[(pitchers_df['yearID'] >= int(start_year)) & (pitchers_df['yearID'] <= int(end_year)) & (pitchers_df['Name'] == player_name),bat_met]
     return(df.to_dict('records'))
 
-# formatting the data table (For Pitchers) (Maximum and Minimum)
-@app.callback(Output('pit_table','style_data_conditional'),
-             [Input('submit_player_id','n_clicks')],
-             [State('start_year','value'),
-             State('end_year','value'),
-             State('pitching_metrics','value'),
-             State('player_name_det','value')])
-def update_table_formatting_max(n_clicks,start_year,end_year,pit_met,player_name):
-    df = pitchers_df.loc[(pitchers_df['yearID'] >= int(start_year)) & (pitchers_df['yearID'] <= int(end_year)) & (pitchers_df['Name'] == player_name),pit_met]
-    style_dict = highlight_max_min_row(df)
-    return(style_dict)
 
 # Updating and populating the pitching average table
 @app.callback(Output('pit_avg_table','data'),

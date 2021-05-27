@@ -8,6 +8,9 @@ app = dash.Dash(external_stylesheets = [dbc.themes.MATERIA],
                     "name":"viewport",
                     "content":'width=device-width,initial-scale=1.0'
                     }
-                ])
+                ],
+                suppress_callback_exceptions = True)
+
+
 
 server = app.server
