@@ -4,6 +4,7 @@ import dash_html_components as html
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output, State
 import pandas as pd
+import numpy as np
 import base64
 import dash_table
 import pathlib
@@ -80,35 +81,7 @@ batting_tooltip = {
 }
 
 
-# Description for batting tooltip
-pitching_tooltip = {
-                    'yearID':['Year of Play'],
-                    'lgID':['Baseball League Id'],
-                    'Name':['Player Name'],
-                    'Team':['Team Name'],
-                    'PA':['Plate Appearances'],
-                    'AB':['At Bats'],
-                    'HR':['Home Runs'],
-                    'H':['Hits'],
-                    'X2B':['Second Bases'],
-                    'X3B':['Third Bases'],
-                    'RBI':['Runs Batted In'],
-                    'SB':['Stolen Bases'],
-                    'ISO':['Isolated Power'],
-                    'BABIP':['Batting Average on Balls in Play'],
-                    'AVG':['Number of Hits divided by At Bats'],
-                    'OBP': ['On Base Percentage'],
-                    'SLG': ['Slugging Percentage'],
-                    'wOBA': ['Weighted On Base Average'],
-                    'wRC.': ['Weighted Runs Created Plus'],
-                    'fWAR': ['Wins Above Replacement'],
-                    'CS': ['Caught Stealing'],
-                    'BB.': ['Base on Balls percentage'],
-                    'K.': ['Strikeout percentage'],
-                    'Off': ['Offense'],
-                    'Def':['Defense']
-}
-
+############################################################################## Helper Functions (Start) ##############################################################################
 
 # Function to encode an image file
 def encode_image(image_file):
@@ -159,6 +132,81 @@ def remove_categorical_columns(lst):
 
     return(lst)
 
+# Function to format colunmns
+def format_cols(df,met, format_columns):
+    bool_vec = [item in met for item in format_columns]
+    check = any(bool_vec)
+    if check:
+        i = 0
+        for item in bool_vec:
+            if item:
+                df[format_columns[i]] = df[format_columns[i]].round(3)
+            i += 1
+    return df
+
+
+# Helper function for populating top batting/pitching metric
+def top_metric(lst):
+    col_list = []
+    for item in lst:
+        if item == 'Team':
+            continue
+        elif item == 'yearID':
+            continue
+        elif item == 'lgID':
+            continue
+        else:
+            col_list.append(item)
+    return col_list
+
+
+# Helper function to select the top N rows by a particular metric
+def top_n_metric(df,k,metric):
+    """
+    -- This function takes in three parameters. These are:
+        * df: data frame
+        * k: Window width of the duration in which the best performance is to be found out
+        * metric: Metric on which the best performance is being calculated
+    -- This function returns the top 'n' years for a player for any selected metric
+    -- If the user doest not select the year column then this function will raise an exception
+    -- and it will coerce the year field into the resultant dataset
+
+    """
+    try:
+        # The if clause checks whether a correct value of k has been selected. If K is more than the number of rows in the
+        # data set then it return the entire data set as it is. Same goes for K = 0
+        if k == None:
+            return df
+        if k >= np.shape(df)[0] or k == 0:
+            return df
+        else:
+
+            # For any other value of K this code chunk is executed. You can see that this code chunk requires the yearID
+            # column to be present in the dataset
+            # if the year id column is not there then this chunk will throw a key error
+            # we are catching that error in the code chunk below
+
+            df_new = df.loc[:,['yearID',metric]].groupby(['yearID']).sum().reset_index()
+            start_new = df_new[metric].rolling(k).mean().dropna().idxmax()
+            end_new = start_new + (k-1)
+            window_start = df_new.loc[start_new,['yearID']]['yearID']
+            window_end = df_new.loc[end_new,['yearID']]['yearID']
+            return(df.loc[(df['yearID']>=window_start) &  (df['yearID']<= window_end),])
+
+    except (KeyError,ValueError) as e :
+        # If the user skips the yearID column from his/her selection then we coerece the yearID column after pullling
+        # it from batters_df data set (batters_df) is a global variable
+
+        year = batters_df.loc[batters_df['Name'] == df['Name'].unique()[0],['yearID']]
+        print(year)
+        # deleting the index column since we wont be needing it
+        df['yearID'] = year['yearID']
+        del year
+        return top_n_metric(df,k,metric)
+
+############################################################################## Helper Functions (End) ##############################################################################
+
+############################################################################## Layout (Start) ######################################################################################
 
 layout = html.Div(id = "player_details_content",children = [
 
@@ -176,6 +224,7 @@ layout = html.Div(id = "player_details_content",children = [
                                                                  value = 'Nap Lajoie',
                                                                  clearable = True)
                                                     ], style = {'width':'80%'}),
+
                                         html.Br(),
                                         html.Label(["Start Year",
                                                     dcc.Dropdown(
@@ -184,6 +233,7 @@ layout = html.Div(id = "player_details_content",children = [
                                                         value = 1871,
                                                         clearable = False
                                                     )], style = {'width':'80%'}),
+
                                         html.Br(),
                                         html.Label(["End Year",
                                                     dcc.Dropdown(
@@ -192,6 +242,7 @@ layout = html.Div(id = "player_details_content",children = [
                                                     value = 2019,
                                                     clearable = False
                                                     )], style = {'width':'80%'}),
+
                                         html.Br(),
                                         html.Label(["Batting Metrics",
                                                     dcc.Dropdown(
@@ -200,12 +251,45 @@ layout = html.Div(id = "player_details_content",children = [
                                                     value = ['yearID','Team','PA','AB','HR','H','X2B','X3B','RBI','SB','ISO','BABIP','fWAR']
                                                     )], style = {'width':'80%'}),
 
+                                        html.Br(),
+                                        html.Label(["Select Top N years",
+                                                    dbc.Input(
+                                                    id = 'batting_top_n',
+                                                    type = "number",
+                                                    placeholder = "type in a number"
+                                                    )], style = {'width':'80%'}),
+
+                                        html.Br(),
+                                        html.Label(["By (Batting Metric):",
+                                                    dcc.Dropdown(
+                                                    id = 'top_batting_metric',
+                                                    clearable = True
+                                                    )
+                                                   ], style = {'width':'80%'}),
+
+                                        html.Br(),
                                         html.Label(["Pitching Metrics",
                                                     dcc.Dropdown(
                                                     id = 'pitching_metrics',
                                                     multi = True,
                                                     value = ['yearID','Team','IP','K.9','BB.9','HR.9','BABIP','ERA','FIP','fWAR','WHIP']
                                                     )], style = {'width':'80%'}),
+
+                                        html.Br(),
+                                        html.Label(["Select Top N years",
+                                                    dbc.Input(
+                                                    id = 'pitching_top_n',
+                                                    type = "number",
+                                                    placeholder = "type in a number"
+                                                    )], style = {'width':'80%'}),
+
+                                        html.Br(),
+                                        html.Label(["By (Pitching Metric):",
+                                                    dcc.Dropdown(
+                                                    id = 'top_pitching_metric',
+                                                    clearable = True
+                                                    )
+                                                   ], style = {'width':'80%'}),
 
                                         html.Br(),
                                         html.Br(),
@@ -282,6 +366,9 @@ layout = html.Div(id = "player_details_content",children = [
                                  ])
                     ])
 
+############################################################################## Layout (End) ######################################################################################
+
+
 #################### Player Details call backs start ###############################################
 
 # Setting up the call back for updating the end year drop down start
@@ -320,6 +407,11 @@ def update_metrics_menu_items(selection):
 
     return(bat_col_dict)
 
+# Setting up the callback for batting metric dropdown
+@app.callback(Output('top_batting_metric','options'),[Input('batting_metrics','value')])
+def update_top_batting_metric(selection):
+    return [{'label':item, 'value':item} for item in top_metric(selection)]
+
 @app.callback(Output("pitching_metrics","options"),[Input("player_name_det","value")])
 def update_metrics_menu_items(selection):
     if selection in list(pitchers_df['Name'].unique()):
@@ -329,6 +421,15 @@ def update_metrics_menu_items(selection):
         pit_col_dict = []
 
     return(pit_col_dict)
+
+# Setting up the callback for pitching metric dropdown
+@app.callback(Output('top_pitching_metric','options'),[Input('pitching_metrics','value'),Input("player_name_det","value")])
+def update_top_pitching_metric(lst,selection):
+    if selection in list(pitchers_df['Name'].unique()):
+        return [{'label':item, 'value':item} for item in top_metric(lst)]
+    else:
+        return []
+
 
 # Callback for the players images
 @app.callback(Output('player_det_image','src'),[Input("player_name_det","value")])
@@ -400,9 +501,17 @@ def update_avg_pitching_table_header(n_clicks, value_list):
              [State('start_year','value'),
              State('end_year','value'),
              State('batting_metrics','value'),
-             State('player_name_det','value')])
-def update_batter_table(n_clicks,start_year,end_year,bat_met,player_name):
-    df = batters_df.loc[(batters_df['yearID'] >= int(start_year)) & (batters_df['yearID'] <= int(end_year)) & (batters_df['Name'] == player_name),bat_met]
+             State('player_name_det','value'),
+             State('batting_top_n','value'),
+             State('top_batting_metric','value')])
+def update_batter_table(n_clicks,start_year,end_year,bat_met,player_name,k,metric):
+
+    df = batters_df.loc[(batters_df['yearID'] >= int(start_year)) & (batters_df['yearID'] <= int(end_year)) & (batters_df['Name'] == player_name),bat_met+['Name']]
+    df = df.fillna(0)
+    format_columns = ['ISO','BABIP','AVG', 'OBP', 'SLG','wOBA']
+    df = format_cols(df,bat_met, format_columns)
+    df = top_n_metric(df,k,metric)
+    df = df.loc[:,df.columns != 'Name']
     return(df.to_dict('records'))
 
 
