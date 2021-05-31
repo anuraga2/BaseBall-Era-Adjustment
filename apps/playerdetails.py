@@ -248,7 +248,7 @@ layout = html.Div(id = "player_details_content",children = [
                                                     dcc.Dropdown(
                                                     id = 'batting_metrics',
                                                     multi = True,
-                                                    value = ['yearID','Team','PA','AB','HR','H','X2B','X3B','RBI','SB','ISO','BABIP','fWAR']
+                                                    value = ['yearID','Team','PA','AB','AVG','HR','H','X2B','X3B','RBI','SB','ISO','BABIP','fWAR']
                                                     )], style = {'width':'80%'}),
 
                                         html.Br(),
@@ -272,7 +272,7 @@ layout = html.Div(id = "player_details_content",children = [
                                                     dcc.Dropdown(
                                                     id = 'pitching_metrics',
                                                     multi = True,
-                                                    value = ['yearID','Team','IP','K.9','BB.9','HR.9','BABIP','ERA','FIP','fWAR','WHIP']
+                                                    value = ['yearID','Team','IP','K.9','BB.9','HR.9','BABIP','ERA','FIP','WHIP','fWAR']
                                                     )], style = {'width':'80%'}),
 
                                         html.Br(),
@@ -547,9 +547,16 @@ def update_batting_average(n_clicks,start_year,end_year,bat_met,player_name):
              [State('start_year','value'),
              State('end_year','value'),
              State('pitching_metrics','value'),
-             State('player_name_det','value')])
-def update_pitcher_table(n_clicks,start_year,end_year,bat_met,player_name):
-    df = pitchers_df.loc[(pitchers_df['yearID'] >= int(start_year)) & (pitchers_df['yearID'] <= int(end_year)) & (pitchers_df['Name'] == player_name),bat_met]
+             State('player_name_det','value'),
+             State('pitching_top_n','value'),
+             State('top_pitching_metric','value')])
+def update_pitcher_table(n_clicks,start_year,end_year,pit_met,player_name,k,metric):
+    df = pitchers_df.loc[(pitchers_df['yearID'] >= int(start_year)) & (pitchers_df['yearID'] <= int(end_year)) & (pitchers_df['Name'] == player_name),pit_met+['Name']]
+    df = df.fillna(0)
+    format_columns = ['BABIP']
+    df = format_cols(df,pit_met, format_columns)
+    df = top_n_metric(df,k,metric)
+    df = df.loc[:,df.columns != 'Name']
     return(df.to_dict('records'))
 
 
