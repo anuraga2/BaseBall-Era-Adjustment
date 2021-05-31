@@ -10,7 +10,7 @@ from app import server
 
 
 # Connecting to different app pages from the
-from apps import playerdetails, playersearch
+from apps import playerdetails, playersearch, tooltipdata
 
 
 

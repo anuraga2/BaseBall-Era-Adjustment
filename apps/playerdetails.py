@@ -10,7 +10,9 @@ import dash_table
 import pathlib
 from dash.exceptions import PreventUpdate
 from app import app
+from app import tooltip
 #import tooltipdata
+
 
 # get relative data folder
 PATH = pathlib.Path(__file__).parent
@@ -50,35 +52,6 @@ dedup_player_dict_list = [dict(t) for t in {tuple(d.items()) for d in (pitchers_
 
 # Dictionary for time selection
 time_dict = [{'label': i, 'value' : i} for i in range(1871,2020)]
-
-# Description for batting tooltip
-batting_tooltip = {
-                    'yearID':['Year of Play'],
-                    'lgID':['Baseball League Id'],
-                    'Name':['Player Name'],
-                    'Team':['Team Name'],
-                    'PA':['Plate Appearances'],
-                    'AB':['At Bats'],
-                    'HR':['Home Runs'],
-                    'H':['Hits'],
-                    'X2B':['Second Bases'],
-                    'X3B':['Third Bases'],
-                    'RBI':['Runs Batted In'],
-                    'SB':['Stolen Bases'],
-                    'ISO':['Isolated Power'],
-                    'BABIP':['Batting Average on Balls in Play'],
-                    'AVG':['Number of Hits divided by At Bats'],
-                    'OBP': ['On Base Percentage'],
-                    'SLG': ['Slugging Percentage'],
-                    'wOBA': ['Weighted On Base Average'],
-                    'wRC.': ['Weighted Runs Created Plus'],
-                    'fWAR': ['Wins Above Replacement'],
-                    'CS': ['Caught Stealing'],
-                    'BB.': ['Base on Balls percentage'],
-                    'K.': ['Strikeout percentage'],
-                    'Off': ['Offense'],
-                    'Def':['Defense']
-}
 
 
 ############################################################################## Helper Functions (Start) ##############################################################################
@@ -456,7 +429,7 @@ def update_table_header(n_clicks,value_list):
               [Input('submit_player_id','n_clicks')],
               [State('batting_metrics','value')])
 def table_header_tooltip(n_clicks,value_list):
-    return {val:batting_tooltip[val] for val in value_list}
+    return {val:tooltip['batting_tooltip'][val] for val in value_list}
 #############Batting table header and tooltip (End)##################
 
 #############Batting Average table header and tooltip (Start)##################
@@ -475,7 +448,7 @@ def update_avg_batting_table_header(n_clicks, value_list):
 def update_avg_batting_table_header(n_clicks, value_list):
     ## Excluding the three categorical columns from the average table
     lst = remove_categorical_columns(value_list)
-    return {val:batting_tooltip[val] for val in lst}
+    return {val:tooltip['batting_tooltip'][val] for val in lst}
 
 #############Batting Average table header and tooltip (End)##################
 
