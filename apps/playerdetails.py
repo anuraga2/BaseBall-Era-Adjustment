@@ -195,6 +195,8 @@ layout = html.Div(id = "player_details_content",children = [
                                                     dcc.Dropdown(id = "player_name_det",
                                                                  options = dedup_player_dict_list,
                                                                  value = 'Nap Lajoie',
+                                                                 persistence = True,
+                                                                 persistence_type = 'session',
                                                                  clearable = True)
                                                     ], style = {'width':'80%'}),
 
@@ -204,6 +206,8 @@ layout = html.Div(id = "player_details_content",children = [
                                                         id = 'start_year',
                                                         options = time_dict,
                                                         value = 1871,
+                                                        persistence = True,
+                                                        persistence_type = 'session',
                                                         clearable = False
                                                     )], style = {'width':'80%'}),
 
@@ -213,6 +217,8 @@ layout = html.Div(id = "player_details_content",children = [
                                                     id = 'end_year',
                                                     options = time_dict,
                                                     value = 2019,
+                                                    persistence = True,
+                                                    persistence_type = 'session',
                                                     clearable = False
                                                     )], style = {'width':'80%'}),
 
@@ -221,7 +227,9 @@ layout = html.Div(id = "player_details_content",children = [
                                                     dcc.Dropdown(
                                                     id = 'batting_metrics',
                                                     multi = True,
-                                                    value = ['yearID','Team','PA','AB','AVG','HR','H','X2B','X3B','RBI','SB','ISO','BABIP','fWAR']
+                                                    value = ['yearID','Team','PA','AB','AVG','HR','H','X2B','X3B','RBI','SB','ISO','BABIP','fWAR'],
+                                                    persistence = True,
+                                                    persistence_type = 'session'
                                                     )], style = {'width':'80%'}),
 
                                         html.Br(),
@@ -229,14 +237,18 @@ layout = html.Div(id = "player_details_content",children = [
                                                     dbc.Input(
                                                     id = 'batting_top_n',
                                                     type = "number",
-                                                    placeholder = "type in a number"
+                                                    placeholder = "type in a number",
+                                                    persistence = True,
+                                                    persistence_type = 'session'
                                                     )], style = {'width':'80%'}),
 
                                         html.Br(),
                                         html.Label(["By (Batting Metric):",
                                                     dcc.Dropdown(
                                                     id = 'top_batting_metric',
-                                                    clearable = True
+                                                    clearable = True,
+                                                    persistence = True,
+                                                    persistence_type = 'session'
                                                     )
                                                    ], style = {'width':'80%'}),
 
@@ -245,7 +257,9 @@ layout = html.Div(id = "player_details_content",children = [
                                                     dcc.Dropdown(
                                                     id = 'pitching_metrics',
                                                     multi = True,
-                                                    value = ['yearID','Team','IP','K.9','BB.9','HR.9','BABIP','ERA','FIP','WHIP','fWAR']
+                                                    value = ['yearID','Team','IP','K.9','BB.9','HR.9','BABIP','ERA','FIP','WHIP','fWAR'],
+                                                    persistence = True,
+                                                    persistence_type = 'session'
                                                     )], style = {'width':'80%'}),
 
                                         html.Br(),
@@ -253,20 +267,38 @@ layout = html.Div(id = "player_details_content",children = [
                                                     dbc.Input(
                                                     id = 'pitching_top_n',
                                                     type = "number",
-                                                    placeholder = "type in a number"
+                                                    placeholder = "type in a number",
+                                                    persistence = True,
+                                                    persistence_type = 'session'
                                                     )], style = {'width':'80%'}),
 
                                         html.Br(),
                                         html.Label(["By (Pitching Metric):",
                                                     dcc.Dropdown(
                                                     id = 'top_pitching_metric',
-                                                    clearable = True
+                                                    clearable = True,
+                                                    persistence = True,
+                                                    persistence_type = 'session'
                                                     )
                                                    ], style = {'width':'80%'}),
 
                                         html.Br(),
                                         html.Br(),
-                                        dbc.Button("Submit Metrics to Update Table",color = "success",n_clicks = 0, id = 'submit_player_id')
+                                        dbc.Button("Submit Metrics to Update Table",color = "success",n_clicks = 0, id = 'submit_player_id'),
+
+                                        html.Br(),
+                                        html.Br(),
+                                        dcc.Markdown("""
+                                        ##### __Note:__
+
+                                        * The data tables (for both batting/pitching) can be filtered/sorted based on any column
+                                        * Sorting can be done by clicking on any column header
+                                        * Filteration can be done by typing in the search bar present below the column header, the following text:
+                                            * Greater than some Value ( > Value)
+                                            * <=Value
+                                            * =Value
+                                            * To restore the table to its original form clear the text and hit 'enter'
+                                        """)
 
                                  ], width = 4),
 
@@ -452,6 +484,7 @@ def update_avg_batting_table_header(n_clicks, value_list):
 
 #############Batting Average table header and tooltip (End)##################
 
+############# Pitching table header and tooltip (Start)##################
 # setting up a callback for the pitching table header
 @app.callback(Output('pit_table','columns'),
               [Input('submit_player_id','n_clicks')],
@@ -459,6 +492,16 @@ def update_avg_batting_table_header(n_clicks, value_list):
 def update_table_header(n_clicks,value_list):
     return [{"name": i, "id": i} for i in value_list]
 
+# Setting up a call back for the batting table header tooltip
+@app.callback(Output('pit_table','tooltip_header'),
+              [Input('submit_player_id','n_clicks')],
+              [State('pitching_metrics','value')])
+def table_header_tooltip(n_clicks,value_list):
+    return {val:tooltip['pitching_tooltip'][val] for val in value_list}
+
+############# Pitching table header and tooltip (End)##################
+
+############# Pitching Average table header and tooltip (Start)##################
 # Setting up a callback for the batting average table headers
 @app.callback(Output('pit_avg_table','columns'),
              [Input('submit_player_id','n_clicks')],
@@ -468,6 +511,17 @@ def update_avg_pitching_table_header(n_clicks, value_list):
     lst = remove_categorical_columns(value_list)
     return [{"name": i, "id": i} for i in lst]
 
+
+@app.callback(Output('pit_avg_table','tooltip_header'),
+             [Input('submit_player_id','n_clicks')],
+             [State('pitching_metrics','value')])
+def update_avg_batting_table_header(n_clicks, value_list):
+    ## Excluding the three categorical columns from the average table
+    lst = remove_categorical_columns(value_list)
+    return {val:tooltip['pitching_tooltip'][val] for val in lst}
+
+
+############# Pitching Average table header and tooltip (End)##################
 # updating table data (For both batters)
 @app.callback(Output('bat_table','data'),
              [Input('submit_player_id','n_clicks')],

@@ -71,7 +71,10 @@ layout = html.Div(id = "player_search_content",
 
             html.P("Baseball Player Search:", style = {'font-size':'20px'}),
             html.Br(),
-            html.Label([dcc.Dropdown(id = 'player_det_search', value = 'Nap Lajoie')], style = {'width':'100%'}),
+            html.Label([dcc.Dropdown(id = 'player_det_search',
+                                     value = 'Nap Lajoie',
+                                     persistence = True,
+                                     persistence_type = 'session')], style = {'width':'100%'}),
             html.Br(),
             html.Br(),
             # This section contains the code for player images, summary and bio
@@ -124,7 +127,10 @@ layout = html.Div(id = "player_search_content",
 
             ]),
             html.Br(),
+            dcc.Link(
             dbc.Button("Click here to visit the player stats page", color="success", id="player_det_tab_switch"),
+            href = '/apps/playerDetails'
+            ),
         ]
     )
 
