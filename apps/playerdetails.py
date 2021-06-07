@@ -105,6 +105,16 @@ def remove_categorical_columns(lst):
 
     return(lst)
 
+
+def remove_columns(lst):
+    cols_rem = ['yearID','Team','lgID','Name','X','playerID','pops']
+
+    for item in cols_rem:
+        if item in lst:
+            lst.remove(item)
+
+    return(lst)
+
 # Function to format colunmns
 def format_cols(df,met, format_columns):
     bool_vec = [item in met for item in format_columns]
@@ -132,7 +142,95 @@ def top_metric(lst):
             col_list.append(item)
     return col_list
 
+######################################################################################################### Helper Function for batting averages and totals
 
+def remove_columns(lst):
+    cols_rem = ['yearID','Team','lgID','Name','X','playerID','pops']
+
+    for item in cols_rem:
+        if item in lst:
+            lst.remove(item)
+
+    return(lst)
+
+def check_base_fields(df,base_fields):
+    """
+    This function check whether the entries in the base fields list is present in the data frame or not.
+    If the item is not present in the data frame it appends it to an empty list and returns it
+    """
+    emp_list = []
+    for item in base_fields:
+        if item not in list(df.columns):
+            emp_list.append(item)
+
+    return emp_list
+
+
+def original_dataframe(start_year,end_year,bat_met,player_name):
+    return batters_df.loc[(batters_df['yearID'] >= int(start_year)) & (batters_df['yearID'] <= int(end_year)) & (batters_df['Name'] == player_name),bat_met]
+
+
+def slg_average(df,start_year,end_year,lst,player_name):
+    base_fields = ['AB','HR','X3B','X2B','SLG']
+    emp_list = check_base_fields(df,base_fields)
+
+    if not emp_list:
+        df['X1B'] = round(df['SLG']*df['AB'] - (4*df['HR'] + 3*df['X3B'] + 2*df['X2B']),0)
+        return round((df['X1B'].sum(axis = 0) + df['X2B'].sum(axis = 0) * 2 + df['X3B'].sum(axis = 0) * 3 + df['X3B'].sum(axis = 0) * 3) / df['AB'].sum(axis = 0),3)
+
+    else:
+        df = original_dataframe(start_year,end_year,lst+emp_list,player_name)
+        df['X1B'] = round(df['SLG']*df['AB'] - (4*df['HR'] + 3*df['X3B'] + 2*df['X2B']),0)
+        SLG = round((df['X1B'].sum(axis = 0) + df['X2B'].sum(axis = 0) * 2 + df['X3B'].sum(axis = 0) * 3 + df['X3B'].sum(axis = 0) * 3) / df['AB'].sum(axis = 0),3)
+        del df['X1B']
+        return SLG
+
+def batting_average(df,start_year,end_year,bat_met,player_name):
+    base_fields = ['H','AB']
+    emp_list = check_base_fields(df,base_fields)
+
+    if not emp_list:
+        return round(df['H'].sum(axis = 0) / df['AB'].sum(axis = 0),3)
+
+    else:
+        df = original_dataframe(start_year,end_year,bat_met+emp_list,player_name)
+        return round(df['H'].sum(axis = 0) / df['AB'].sum(axis = 0),3)
+
+
+def update_batting_average(start_year,end_year,bat_met,player_name):
+    lst = remove_columns(bat_met)
+    df = original_dataframe(start_year,end_year,lst,player_name)
+    emp_dict_avg = {}
+    emp_dict_sum = {}
+
+    # Making a list of metrics where a simple summation of columns works
+    simp_agg = ['PA','AB','HR','H','X2B','X3B','RBI','SB']
+    for item in simp_agg:
+        if item in lst:
+            emp_dict_avg[item] = round(df[item].mean(axis = 0),2)
+            emp_dict_sum[item] = df[item].sum(axis = 0)
+
+    # Code chunk for calculating Slogging Percentage
+    if 'SLG' in lst:
+        emp_dict_avg['SLG'] = slg_average(df,start_year,end_year,lst,player_name)
+
+
+    # Checking for batting averages
+    if 'AVG' in lst:
+        emp_dict_avg['AVG'] = batting_average(df,start_year,end_year,lst,player_name)
+
+
+    if 'ISO' in lst:
+        agg_slg = slg_average(df,start_year,end_year,lst,player_name)
+        agg_avg = batting_average(df,start_year,end_year,lst,player_name)
+        emp_dict_avg['ISO'] = round(agg_slg - agg_avg,3)
+
+    if 'K.' in lst:
+
+
+    return [emp_dict_avg,emp_dict_sum]
+
+####################################################################################################################################
 # Helper function to select the top N rows by a particular metric
 def top_n_metric(df,k,metric):
     """
@@ -160,8 +258,8 @@ def top_n_metric(df,k,metric):
             # we are catching that error in the code chunk below
 
             df_new = df.loc[:,['yearID',metric]].groupby(['yearID']).sum().reset_index()
-            start_new = df_new[metric].rolling(k).mean().dropna().idxmax()
-            end_new = start_new + (k-1)
+            end_new = df_new[metric].rolling(k).mean().dropna().idxmax()
+            start_new = end_new - (k-1)
             window_start = df_new.loc[start_new,['yearID']]['yearID']
             window_end = df_new.loc[end_new,['yearID']]['yearID']
             return(df.loc[(df['yearID']>=window_start) &  (df['yearID']<= window_end),])
@@ -309,9 +407,9 @@ layout = html.Div(id = "player_details_content",children = [
                                  html.Br(),
                                  html.Br(),
                                  html.Br(),
-                                 dbc.Row([html.Img(id = "player_det_image",src="children",height=250)], justify="left"),
-                                 html.Br(),
                                  dbc.Row([html.P("Nap Lajoie", id="player_img_name", style = {'font-weight':'bold'})]),
+                                 html.Br(),
+                                 dbc.Row([html.Img(id = "player_det_image",src="children",height=250)], justify="left"),
                                  html.Br(),
                                  ##dbc.Row([html.P(id="player_det_txt", style = {'font-weight':'bold'})],justify="left"),
                                  dbc.Row([
@@ -477,7 +575,7 @@ def update_avg_batting_table_header(n_clicks, value_list):
 @app.callback(Output('bat_avg_table','tooltip_header'),
              [Input('submit_player_id','n_clicks')],
              [State('batting_metrics','value')])
-def update_avg_batting_table_header(n_clicks, value_list):
+def update_avg_batting_table_header_tooltip(n_clicks, value_list):
     ## Excluding the three categorical columns from the average table
     lst = remove_categorical_columns(value_list)
     return {val:tooltip['batting_tooltip'][val] for val in lst}
