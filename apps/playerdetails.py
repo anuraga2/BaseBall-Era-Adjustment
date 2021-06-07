@@ -105,16 +105,6 @@ def remove_categorical_columns(lst):
 
     return(lst)
 
-
-def remove_columns(lst):
-    cols_rem = ['yearID','Team','lgID','Name','X','playerID','pops']
-
-    for item in cols_rem:
-        if item in lst:
-            lst.remove(item)
-
-    return(lst)
-
 # Function to format colunmns
 def format_cols(df,met, format_columns):
     bool_vec = [item in met for item in format_columns]
@@ -142,9 +132,11 @@ def top_metric(lst):
             col_list.append(item)
     return col_list
 
-######################################################################################################### Helper Function for batting averages and totals
-
+################################################################# Helper Function for batting averages and totals #################################################################
 def remove_columns(lst):
+    """
+    This helper functions removes certain columns from the data frame if they exist in it
+    """
     cols_rem = ['yearID','Team','lgID','Name','X','playerID','pops']
 
     for item in cols_rem:
@@ -167,10 +159,16 @@ def check_base_fields(df,base_fields):
 
 
 def original_dataframe(start_year,end_year,bat_met,player_name):
+    """
+    This function returns a dataframe subsetted according to the bat_met columns and other parameters
+    """
     return batters_df.loc[(batters_df['yearID'] >= int(start_year)) & (batters_df['yearID'] <= int(end_year)) & (batters_df['Name'] == player_name),bat_met]
 
 
-def slg_average(df,start_year,end_year,lst,player_name):
+def slg_average(df,start_year,end_year,bat_met,player_name):
+    """
+    Helper function to calculate the slogging average value
+    """
     base_fields = ['AB','HR','X3B','X2B','SLG']
     emp_list = check_base_fields(df,base_fields)
 
@@ -179,13 +177,18 @@ def slg_average(df,start_year,end_year,lst,player_name):
         return round((df['X1B'].sum(axis = 0) + df['X2B'].sum(axis = 0) * 2 + df['X3B'].sum(axis = 0) * 3 + df['X3B'].sum(axis = 0) * 3) / df['AB'].sum(axis = 0),3)
 
     else:
-        df = original_dataframe(start_year,end_year,lst+emp_list,player_name)
+        df = original_dataframe(start_year,end_year,bat_met+emp_list,player_name)
         df['X1B'] = round(df['SLG']*df['AB'] - (4*df['HR'] + 3*df['X3B'] + 2*df['X2B']),0)
         SLG = round((df['X1B'].sum(axis = 0) + df['X2B'].sum(axis = 0) * 2 + df['X3B'].sum(axis = 0) * 3 + df['X3B'].sum(axis = 0) * 3) / df['AB'].sum(axis = 0),3)
         del df['X1B']
         return SLG
 
 def batting_average(df,start_year,end_year,bat_met,player_name):
+
+    """
+    Helper function to calculate the batting average
+    """
+
     base_fields = ['H','AB']
     emp_list = check_base_fields(df,base_fields)
 
@@ -197,18 +200,57 @@ def batting_average(df,start_year,end_year,bat_met,player_name):
         return round(df['H'].sum(axis = 0) / df['AB'].sum(axis = 0),3)
 
 
+def strikeout_percentage_average(df,start_year, end_year,bat_met, player_name):
+    """
+    Helper function to calculate the strikeout percentage
+    """
+
+    base_fields = ['PA']
+    emp_list = check_base_fields(df,base_fields)
+
+    if not emp_list:
+        k_val = round((pd.to_numeric(df['K.'].str.split('%').str[0])/100)*df['PA'],0).sum()
+        pa_total = df['PA'].fillna(0).sum()
+        return "{:.2%}".format(k_val / pa_total)
+    else:
+        df = original_dataframe(start_year,end_year,bat_met+emp_list,player_name)
+        strikeout_percentage_average(df,start_year, end_year,bat_met, player_name)
+
+
+def walkout_percentage_average(df,start_year, end_year,bat_met, player_name):
+    """
+    Helper function to calculate the walkout percentage
+    """
+    base_fields = ['PA']
+    emp_list = check_base_fields(df,base_fields)
+
+    if not emp_list:
+        bb_val = round((pd.to_numeric(df['BB.'].str.split('%').str[0])/100)*df['PA'],0).sum()
+        pa_total = df['PA'].fillna(0).sum()
+        return "{:.2%}".format(bb_val / pa_total)
+    else:
+        df = original_dataframe(start_year,end_year,bat_met+emp_list,player_name)
+        walkout_percentage_average(df,start_year, end_year,bat_met, player_name)
+
+
+## The function below ties all the helper functions together to do that aggregation
 def update_batting_average(start_year,end_year,bat_met,player_name):
+    # Removing the columns we don't want in our aggregation
     lst = remove_columns(bat_met)
+
+    # Removing the columns that are not required in our data frame for our aggregation
     df = original_dataframe(start_year,end_year,lst,player_name)
+
+    # Declaring two empty dictionaries. One for Average and other for total
     emp_dict_avg = {}
     emp_dict_sum = {}
 
     # Making a list of metrics where a simple summation of columns works
-    simp_agg = ['PA','AB','HR','H','X2B','X3B','RBI','SB']
+    simp_agg = ['PA','AB','HR','H','X2B','X3B','RBI','SB','CS','Off','Def']
     for item in simp_agg:
         if item in lst:
             emp_dict_avg[item] = round(df[item].mean(axis = 0),2)
-            emp_dict_sum[item] = df[item].sum(axis = 0)
+            emp_dict_sum[item] = round(df[item].sum(axis = 0),2)
 
     # Code chunk for calculating Slogging Percentage
     if 'SLG' in lst:
@@ -219,18 +261,40 @@ def update_batting_average(start_year,end_year,bat_met,player_name):
     if 'AVG' in lst:
         emp_dict_avg['AVG'] = batting_average(df,start_year,end_year,lst,player_name)
 
-
+    # Checking for Isolated power
     if 'ISO' in lst:
         agg_slg = slg_average(df,start_year,end_year,lst,player_name)
         agg_avg = batting_average(df,start_year,end_year,lst,player_name)
         emp_dict_avg['ISO'] = round(agg_slg - agg_avg,3)
 
+    # Checking for strikeout percentage
     if 'K.' in lst:
+        emp_dict_avg['K.'] = strikeout_percentage_average(df,start_year,end_year,lst,player_name)
 
+    # Checking for walkout percentage
+    if 'BB.' in lst:
+        emp_dict_avg['BB.'] = walkout_percentage_average(df,start_year,end_year,lst,player_name)
 
+    # last three metrics are sabermetrics. Since we don't have the underlying data, we are doing a simple aggregation (i.e. mean)
+    if 'fWAR' in lst:
+        emp_dict_avg['fWAR'] = round(df['fWAR'].mean(axis = 0),2)
+
+    if 'wOBA' in lst:
+        emp_dict_avg['wOBA'] = round(df['wOBA'].mean(axis = 0),2)
+
+    if 'wRC.' in lst:
+        emp_dict_avg['wRC.'] = round(df['wRC.'].mean(axis = 0),2)
+
+    if 'BABIP' in lst:
+        emp_dict_avg['BABIP'] = round(df['BABIP'].mean(axis = 0),2)
+
+    if 'OBP' in lst:
+        emp_dict_avg['OBP'] = round(df['OBP'].mean(axis = 0),2)
+
+    # returning both the
     return [emp_dict_avg,emp_dict_sum]
 
-####################################################################################################################################
+################################################################################ Helper Function for batting averages and totals ################################################################################
 # Helper function to select the top N rows by a particular metric
 def top_n_metric(df,k,metric):
     """
@@ -647,22 +711,8 @@ def update_batter_table(n_clicks,start_year,end_year,bat_met,player_name,k,metri
              State('end_year','value'),
              State('batting_metrics','value'),
              State('player_name_det','value')])
-def update_batting_average(n_clicks,start_year,end_year,bat_met,player_name):
-    lst = remove_categorical_columns(bat_met)
-    df = batters_df.loc[(batters_df['yearID'] >= int(start_year)) & (batters_df['yearID'] <= int(end_year)) & (batters_df['Name'] == player_name),lst]
-    data_dict = df.mean(axis = 0).to_dict()
-    if bat_met in ['BABIP','ISO','AVG']:
-        BABIP = data_dict['BABIP']
-        ISO = data_dict['ISO']
-        AVG = data_dict['AVG']
-    else:
-        pass
-
-    res = {key : round(data_dict[key], 2) for key in data_dict}
-    if bat_met in ['BABIP','ISO','AVG']:
-        res["BABIP"] = round(BABIP, 4)
-        res["ISO"] = round(ISO, 4)
-        res["AVG"] = round(AVG, 4)
+def batting_average_val(n_clicks,start_year,end_year,bat_met,player_name):
+    res = update_batting_average(start_year,end_year,bat_met,player_name)[0]
     return [res]
 
 
