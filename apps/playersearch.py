@@ -68,13 +68,6 @@ def transpose_data(player_name):
 layout = html.Div(id = "player_search_content",
         children = [
             dbc.Row([
-
-            html.P("Baseball Player Search:", style = {'font-size':'20px'}),
-            html.Br(),
-            html.Label([dcc.Dropdown(id = 'player_det_search',
-                                     value = 'Nap Lajoie',
-                                     persistence = True,
-                                     persistence_type = 'session')], style = {'width':'100%'}),
             html.Br(),
             html.Br(),
             # This section contains the code for player images, summary and bio
@@ -139,7 +132,7 @@ layout = html.Div(id = "player_search_content",
 #################### Call Backs for Drop downs player Search Tab (Starts here) #####################################
 @app.callback(
     dash.dependencies.Output("player_det_search", "options"),
-    [dash.dependencies.Input("player_det_search", "search_value")],
+    [dash.dependencies.Input("player_name_det", "search_value")],
 )
 def update_options(search_value):
     if not search_value:
@@ -147,32 +140,32 @@ def update_options(search_value):
     return [o for o in player_search_options if search_value in o["label"]]
 
 # Callback for the players images
-@app.callback(Output('player_search_image','src'),[Input("player_det_search","value")])
+@app.callback(Output('player_search_image','src'),[Input("player_name_det","value")])
 def callback_image(player_name):
     path = '../img_new/'+player_name+'.png'
     return encode_image(path)
 
 # Callback for the players image names
-@app.callback(Output('player_img_txt','children'),[Input("player_det_search","value")])
+@app.callback(Output('player_img_txt','children'),[Input("player_name_det","value")])
 def image_footer_text(player_name):
     return(player_name)
 
 # Callback for the player bio table
-@app.callback(Output('player_bio_table','data'),[Input('player_det_search','value')])
+@app.callback(Output('player_bio_table','data'),[Input('player_name_det','value')])
 def update_player_bio(player_name):
     df = player_bio.loc[(player_bio['player_name'] == player_name) & -pd.isnull(player_bio['bio_details']),['bio_header','bio_details']]
     return(df.to_dict('records'))
 
 # Callback for the player summary table is below. This callback is broken down into two parts. The table header and the table body
 ## Header callback
-@app.callback(Output('player_summary_table','columns'),[Input('player_det_search','value')])
+@app.callback(Output('player_summary_table','columns'),[Input('player_name_det','value')])
 def update_player_summ_header(player_name):
     summ = transpose_data(player_name)
     cols = [{'name':'Summary', 'id':'Summary'}]+[{'name':item, 'id':item} for item in list(summ.columns)]
     return(cols)
 
 ## player summary table callback
-@app.callback(Output('player_summary_table','data'),[Input('player_det_search','value')])
+@app.callback(Output('player_summary_table','data'),[Input('player_name_det','value')])
 def update_player_summ_header(player_name):
     summ = transpose_data(player_name)
     rec = summ.to_dict('records')[0]

@@ -28,6 +28,17 @@ app.layout = dbc.Container([
                                     dcc.Link('Player Search |', href = '/apps/playerSearch', style = {'font-size':'20px'}),
                                     dcc.Link(' Player Details', href = '/apps/playerDetails', style = {'font-size':'20px'})
                                     ],justify = "center"),
+                                    html.Br(),
+                                    dbc.Row([
+                                     html.Label(["Baseball Player Search",
+                                                dcc.Dropdown(id = "player_name_det",
+                                                             options = playersearch.dedup_player_dict_list,
+                                                             value = 'Nap Lajoie',
+                                                             persistence = True,
+                                                             persistence_type = 'session',
+                                                             clearable = True)
+                                                ], style = {'width':'80%', 'font-size': '15px'})
+                                    ],justify = "center"),
 
                                     dcc.Location(id='url', refresh = False),
                                     html.Div(id='content',children = [])

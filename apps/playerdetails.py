@@ -305,7 +305,6 @@ def top_n_metric(df,k,metric):
     -- This function returns the top 'n' years for a player for any selected metric
     -- If the user doest not select the year column then this function will raise an exception
     -- and it will coerce the year field into the resultant dataset
-
     """
     try:
         # The if clause checks whether a correct value of k has been selected. If K is more than the number of rows in the
@@ -346,23 +345,10 @@ def top_n_metric(df,k,metric):
 layout = html.Div(id = "player_details_content",children = [
 
                                  dbc.Row([
-
+                                 html.Br(),
                                  # Content for column 1 will go here
                                  dbc.Col([
                                          html.P("Filters",style = {'font-size':'20px'}),
-                                         html.Br(),
-
-                                         # Adding the player category dropdown
-                                         html.Label(["Player Name",
-                                                    dcc.Dropdown(id = "player_name_det",
-                                                                 options = dedup_player_dict_list,
-                                                                 value = 'Nap Lajoie',
-                                                                 persistence = True,
-                                                                 persistence_type = 'session',
-                                                                 clearable = True)
-                                                    ], style = {'width':'80%'}),
-
-                                        html.Br(),
                                         html.Label(["Start Year",
                                                     dcc.Dropdown(
                                                         id = 'start_year',
@@ -452,7 +438,6 @@ layout = html.Div(id = "player_details_content",children = [
                                         html.Br(),
                                         dcc.Markdown("""
                                         ##### __Note:__
-
                                         * The data tables (for both batting/pitching) can be filtered/sorted based on any column
                                         * Sorting can be done by clicking on any column header
                                         * Filteration can be done by typing in the search bar present below the column header, the following text:
@@ -492,16 +477,26 @@ layout = html.Div(id = "player_details_content",children = [
                                                           filter_action="native"
                                                                             ),
                                                           html.Br(),
-                                                          html.P("Batting Averages",id="batting_average_txt", style = {'font-weight':'bold'})], style= {'display': 'block'}),
+                                                          html.P("Batting Totals",id="batting_tot_txt", style = {'font-weight':'bold'}),
                                                           html.Br(),
+                                                          dash_table.DataTable(
+                                                          id = 'bat_tot_table',
+                                                          style_cell = {
+                                                          'textAlign':'left',
+                                                          'whiteSpace':'normal',
+                                                          'height':'auto'},
+                                                          style_data = {'width':'120px'}),
+                                                          html.Br(),
+                                                          html.P("Batting Averages",id="batting_average_txt", style = {'font-weight':'bold'}),
                                                           dash_table.DataTable(
                                                           id = 'bat_avg_table',
                                                           style_cell = {
                                                           'textAlign':'left',
                                                           'whiteSpace':'normal',
                                                           'height':'auto'},
-                                                          style_data = {'width':'120px'}
-                                                          )
+                                                           style_data = {'width':'120px'}
+                                                            )], style= {'display': 'block'}),
+                                                          html.Br()
                                   ],justify="left"),
                                  html.Br(),
                                  dbc.Row([
@@ -646,6 +641,21 @@ def update_avg_batting_table_header_tooltip(n_clicks, value_list):
 
 #############Batting Average table header and tooltip (End)##################
 
+#############Batting Average table header and tooltip (Start)##################
+@app.callback(Output('bat_tot_table','columns'),
+              [Input('submit_player_id','n_clicks')],
+              [State('pitching_metrics','value')])
+def update_total_batting_table_header(n_clicks, value_list):
+    simp_agg = ['PA','AB','HR','H','X2B','X3B','RBI','SB','CS','Off','Def']
+    emp_list = []
+    for item in simp_agg:
+        if item in value_list:
+            emp_list.append(item)
+
+    return [{"name": i, "id": i} for i in emp_list]
+
+#############Batting Average table header and tooltip (End)##################
+
 ############# Pitching table header and tooltip (Start)##################
 # setting up a callback for the pitching table header
 @app.callback(Output('pit_table','columns'),
@@ -703,6 +713,16 @@ def update_batter_table(n_clicks,start_year,end_year,bat_met,player_name,k,metri
     df = df.loc[:,df.columns != 'Name']
     return(df.to_dict('records'))
 
+# updating and populating the total table
+@app.callback(Output('bat_tot_table','data'),
+             [Input('submit_player_id','n_clicks')],
+             [State('start_year','value'),
+             State('end_year','value'),
+             State('batting_metrics','value'),
+             State('player_name_det','value')])
+def batting_average_val(n_clicks,start_year,end_year,bat_met,player_name):
+    res = update_batting_average(start_year,end_year,bat_met,player_name)[1]
+    return [res]
 
 # Updating and populating the average table
 @app.callback(Output('bat_avg_table','data'),
