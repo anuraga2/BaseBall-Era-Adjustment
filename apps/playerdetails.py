@@ -11,6 +11,7 @@ import pathlib
 from dash.exceptions import PreventUpdate
 from app import app
 from app import tooltip
+from dash_table.Format import Format, Scheme
 #import tooltipdata
 
 
@@ -105,17 +106,20 @@ def remove_categorical_columns(lst):
 
     return(lst)
 
-# Function to format colunmns
-def format_cols(df,met, format_columns):
-    bool_vec = [item in met for item in format_columns]
-    check = any(bool_vec)
-    if check:
-        i = 0
-        for item in bool_vec:
-            if item:
-                df[format_columns[i]] = df[format_columns[i]].round(3)
-            i += 1
-    return df
+
+
+# New Function to format columns
+def format_cols(met,format_columns):
+    emp_list = []
+    #format_columns = ['ISO','BABIP','AVG', 'OBP', 'SLG','wOBA']
+    for item in met:
+        if item in format_columns:
+            emp_list.append(item)
+
+    if not emp_list:
+        return [{"name": i, "id": i} for i in met]
+    else:
+        return [{"name": item, "id": item, "type":"numeric", "format":Format(precision=3, scheme=Scheme.fixed)} if item in format_columns else {"name": item, "id": item} for item in met]
 
 
 # Helper function for populating top batting/pitching metric
@@ -174,12 +178,12 @@ def slg_average(df,start_year,end_year,bat_met,player_name):
 
     if not emp_list:
         df['X1B'] = round(df['SLG']*df['AB'] - (4*df['HR'] + 3*df['X3B'] + 2*df['X2B']),0)
-        return round((df['X1B'].sum(axis = 0) + df['X2B'].sum(axis = 0) * 2 + df['X3B'].sum(axis = 0) * 3 + df['X3B'].sum(axis = 0) * 3) / df['AB'].sum(axis = 0),3)
+        return round((df['X1B'].sum(axis = 0) + df['X2B'].sum(axis = 0) * 2 + df['X3B'].sum(axis = 0) * 3 + df['HR'].sum(axis = 0) * 4) / df['AB'].sum(axis = 0),3)
 
     else:
         df = original_dataframe(start_year,end_year,bat_met+emp_list,player_name)
         df['X1B'] = round(df['SLG']*df['AB'] - (4*df['HR'] + 3*df['X3B'] + 2*df['X2B']),0)
-        SLG = round((df['X1B'].sum(axis = 0) + df['X2B'].sum(axis = 0) * 2 + df['X3B'].sum(axis = 0) * 3 + df['X3B'].sum(axis = 0) * 3) / df['AB'].sum(axis = 0),3)
+        SLG = round((df['X1B'].sum(axis = 0) + df['X2B'].sum(axis = 0) * 2 + df['X3B'].sum(axis = 0) * 3 + df['HR'].sum(axis = 0) * 4) / df['AB'].sum(axis = 0),3)
         del df['X1B']
         return SLG
 
@@ -468,7 +472,8 @@ layout = html.Div(id = "player_details_content",children = [
                                                           id = 'bat_table',
                                                           style_cell={'textAlign': 'left',
                                                                       'whiteSpace':'normal',
-                                                                      'height':'auto'},
+                                                                      'height':'auto',
+                                                                      'maxWidth': '50px','minWidth': '50px'},
                                                           style_data = {'width':'120px'},
                                                           #style_data_conditional=style_row_by_top_values(df),
                                                           sort_action="native",
@@ -493,7 +498,8 @@ layout = html.Div(id = "player_details_content",children = [
                                                           style_cell = {
                                                           'textAlign':'left',
                                                           'whiteSpace':'normal',
-                                                          'height':'auto'},
+                                                          'height':'auto',
+                                                          'maxWidth': '50px','minWidth': '50px'},
                                                            style_data = {'width':'120px'}
                                                             )], style= {'display': 'block'}),
                                                           html.Br()
@@ -611,7 +617,9 @@ def update_player_name(selection):
               [Input('submit_player_id','n_clicks')],
               [State('batting_metrics','value')])
 def update_table_header(n_clicks,value_list):
-    return [{"name": i, "id": i} for i in value_list]
+    format_columns = ['ISO','BABIP','AVG', 'OBP', 'SLG','wOBA']
+    ret_lst = format_cols(value_list,format_columns)
+    return ret_lst
 
 # Setting up a call back for the batting table header tooltip
 @app.callback(Output('bat_table','tooltip_header'),
@@ -629,7 +637,9 @@ def table_header_tooltip(n_clicks,value_list):
 def update_avg_batting_table_header(n_clicks, value_list):
     ## Excluding the three categorical columns from the average table
     lst = remove_categorical_columns(value_list)
-    return [{"name": i, "id": i} for i in lst]
+    format_columns = ['ISO','BABIP','AVG', 'OBP', 'SLG','wOBA']
+    ret_lst = format_cols(lst, format_columns)
+    return ret_lst
 
 @app.callback(Output('bat_avg_table','tooltip_header'),
              [Input('submit_player_id','n_clicks')],
@@ -644,7 +654,7 @@ def update_avg_batting_table_header_tooltip(n_clicks, value_list):
 #############Batting Average table header and tooltip (Start)##################
 @app.callback(Output('bat_tot_table','columns'),
               [Input('submit_player_id','n_clicks')],
-              [State('pitching_metrics','value')])
+              [State('batting_metrics','value')])
 def update_total_batting_table_header(n_clicks, value_list):
     simp_agg = ['PA','AB','HR','H','X2B','X3B','RBI','SB','CS','Off','Def']
     emp_list = []
@@ -662,7 +672,9 @@ def update_total_batting_table_header(n_clicks, value_list):
               [Input('submit_player_id','n_clicks')],
               [State('pitching_metrics','value')])
 def update_table_header(n_clicks,value_list):
-    return [{"name": i, "id": i} for i in value_list]
+    format_columns = ['BABIP']
+    ret_lst = format_cols(value_list, format_columns)
+    return ret_lst
 
 # Setting up a call back for the batting table header tooltip
 @app.callback(Output('pit_table','tooltip_header'),
@@ -707,8 +719,6 @@ def update_batter_table(n_clicks,start_year,end_year,bat_met,player_name,k,metri
 
     df = batters_df.loc[(batters_df['yearID'] >= int(start_year)) & (batters_df['yearID'] <= int(end_year)) & (batters_df['Name'] == player_name),bat_met+['Name']]
     df = df.fillna(0)
-    format_columns = ['ISO','BABIP','AVG', 'OBP', 'SLG','wOBA']
-    df = format_cols(df,bat_met, format_columns)
     df = top_n_metric(df,k,metric)
     df = df.loc[:,df.columns != 'Name']
     return(df.to_dict('records'))
@@ -748,8 +758,6 @@ def batting_average_val(n_clicks,start_year,end_year,bat_met,player_name):
 def update_pitcher_table(n_clicks,start_year,end_year,pit_met,player_name,k,metric):
     df = pitchers_df.loc[(pitchers_df['yearID'] >= int(start_year)) & (pitchers_df['yearID'] <= int(end_year)) & (pitchers_df['Name'] == player_name),pit_met+['Name']]
     df = df.fillna(0)
-    format_columns = ['BABIP']
-    df = format_cols(df,pit_met, format_columns)
     df = top_n_metric(df,k,metric)
     df = df.loc[:,df.columns != 'Name']
     return(df.to_dict('records'))
