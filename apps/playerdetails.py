@@ -109,18 +109,36 @@ def remove_categorical_columns(lst):
 
 
 # New Function to format columns
-def format_cols(met,format_columns):
+def format_cols(met,format_columns_sp,format_columns_dp, format_columns_tp):
+    """
+    This helper function is primarily used for defining the formatting of the numbers displayed in the data tables
+    Parameters:
+    -- met: The list of all the metrics that the user has selected to be displayed in the table
+    -- format_columns_sp: List of all the columns that will be displayed with single digit of precision
+    -- format_columns_dp: List of all the columns that will be displayed with double digits of precision
+    -- format_columns_tp: List of all the columns that will be displayed with triple digits of precision
+    """
     emp_list = []
     #format_columns = ['ISO','BABIP','AVG', 'OBP', 'SLG','wOBA']
     for item in met:
-        if item in format_columns:
+        if item in format_columns_sp or item in format_columns_dp or item in format_columns_tp:
             emp_list.append(item)
 
     if not emp_list:
         return [{"name": i, "id": i} for i in met]
     else:
-        return [{"name": item, "id": item, "type":"numeric", "format":Format(precision=3, scheme=Scheme.fixed)} if item in format_columns else {"name": item, "id": item} for item in met]
+        ret_list = []
+        for item in met:
+            if item in format_columns_sp:
+                ret_list.append({"name": item, "id": item, "type":"numeric", "format":Format(precision=1, scheme=Scheme.fixed)})
+            elif item in format_columns_dp:
+                ret_list.append({"name": item, "id": item, "type":"numeric", "format":Format(precision=2, scheme=Scheme.fixed)})
+            elif item in format_columns_tp:
+                ret_list.append({"name": item, "id": item, "type":"numeric", "format":Format(precision=3, scheme=Scheme.fixed)})
+            else:
+                ret_list.append({"name": item, "id": item})
 
+        return ret_list
 
 # Helper function for populating top batting/pitching metric
 def top_metric(lst):
@@ -617,8 +635,10 @@ def update_player_name(selection):
               [Input('submit_player_id','n_clicks')],
               [State('batting_metrics','value')])
 def update_table_header(n_clicks,value_list):
-    format_columns = ['ISO','BABIP','AVG', 'OBP', 'SLG','wOBA']
-    ret_lst = format_cols(value_list,format_columns)
+    format_columns_tp = ['ISO','BABIP','AVG', 'OBP', 'SLG','wOBA']
+    format_columns_dp = ['Def','Off','fWAR']
+    format_columns_sp = []
+    ret_lst = format_cols(value_list,format_columns_sp,format_columns_dp,format_columns_tp)
     return ret_lst
 
 # Setting up a call back for the batting table header tooltip
@@ -637,8 +657,10 @@ def table_header_tooltip(n_clicks,value_list):
 def update_avg_batting_table_header(n_clicks, value_list):
     ## Excluding the three categorical columns from the average table
     lst = remove_categorical_columns(value_list)
-    format_columns = ['ISO','BABIP','AVG', 'OBP', 'SLG','wOBA']
-    ret_lst = format_cols(lst, format_columns)
+    format_columns_tp = ['ISO','BABIP','AVG', 'OBP', 'SLG','wOBA']
+    format_columns_dp = ['Def','Off','fWAR']
+    format_columns_sp = []
+    ret_lst = format_cols(lst,format_columns_sp,format_columns_dp, format_columns_tp)
     return ret_lst
 
 @app.callback(Output('bat_avg_table','tooltip_header'),
@@ -662,7 +684,11 @@ def update_total_batting_table_header(n_clicks, value_list):
         if item in value_list:
             emp_list.append(item)
 
-    return [{"name": i, "id": i} for i in emp_list]
+    format_columns_tp = ['ISO','BABIP','AVG', 'OBP', 'SLG','wOBA']
+    format_columns_dp = ['Def','Off','fWAR']
+    format_columns_sp = []
+    res_lst = format_cols(emp_list,format_columns_sp,format_columns_dp, format_columns_tp)
+    return res_lst
 
 #############Batting Average table header and tooltip (End)##################
 
@@ -672,8 +698,10 @@ def update_total_batting_table_header(n_clicks, value_list):
               [Input('submit_player_id','n_clicks')],
               [State('pitching_metrics','value')])
 def update_table_header(n_clicks,value_list):
-    format_columns = ['BABIP']
-    ret_lst = format_cols(value_list, format_columns)
+    format_columns_tp = ['BABIP']
+    format_columns_dp = ['K.9','BB.9','HR.9','ERA','FIP','WHIP','fWAR']
+    format_columns_sp = ['IP']
+    ret_lst = format_cols(value_list,format_columns_sp,format_columns_dp, format_columns_tp)
     return ret_lst
 
 # Setting up a call back for the batting table header tooltip
@@ -693,7 +721,11 @@ def table_header_tooltip(n_clicks,value_list):
 def update_avg_pitching_table_header(n_clicks, value_list):
     ## Excluding the three categorical columns from the average table
     lst = remove_categorical_columns(value_list)
-    return [{"name": i, "id": i} for i in lst]
+    format_columns_tp = ['BABIP']
+    format_columns_dp = ['K.9','BB.9','HR.9','ERA','FIP','WHIP','fWAR']
+    format_columns_sp = ['IP']
+    ret_lst = format_cols(lst,format_columns_sp,format_columns_dp, format_columns_tp)
+    return ret_lst
 
 
 @app.callback(Output('pit_avg_table','tooltip_header'),
