@@ -12,6 +12,10 @@ from dash.exceptions import PreventUpdate
 from app import app
 from app import tooltip
 from dash_table.Format import Format, Scheme
+from scipy.stats import pareto, beta
+import collections
+import pickle
+import math
 #import tooltipdata
 
 
@@ -53,6 +57,13 @@ dedup_player_dict_list = [dict(t) for t in {tuple(d.items()) for d in (pitchers_
 
 # Dictionary for time selection
 time_dict = [{'label': i, 'value' : i} for i in range(1871,2020)]
+
+# Dataset load for detrending
+WAR_batter_best = pd.read_csv(DATA_PATH.joinpath('WAR_batter_best.csv'))
+
+## Reading the pickled Batting file for Batting fWAR
+with open(DATA_PATH.joinpath('Batter_Name.pkl'),'rb') as batter_pickle:
+    batter_dict = pickle.load(batter_pickle)
 
 
 ############################################################################## Helper Functions (Start) ##############################################################################
@@ -236,7 +247,7 @@ def strikeout_percentage_average(df,start_year, end_year,bat_met, player_name):
         return "{:.2%}".format(k_val / pa_total)
     else:
         df = original_dataframe(start_year,end_year,bat_met+emp_list,player_name)
-        strikeout_percentage_average(df,start_year, end_year,bat_met, player_name)
+        return strikeout_percentage_average(df,start_year, end_year,bat_met, player_name)
 
 
 def walkout_percentage_average(df,start_year, end_year,bat_met, player_name):
@@ -252,7 +263,7 @@ def walkout_percentage_average(df,start_year, end_year,bat_met, player_name):
         return "{:.2%}".format(bb_val / pa_total)
     else:
         df = original_dataframe(start_year,end_year,bat_met+emp_list,player_name)
-        walkout_percentage_average(df,start_year, end_year,bat_met, player_name)
+        return walkout_percentage_average(df,start_year, end_year,bat_met, player_name)
 
 
 ## The function below ties all the helper functions together to do that aggregation
@@ -362,6 +373,145 @@ def top_n_metric(df,k,metric):
 
 ############################################################################## Helper Functions (End) ##############################################################################
 
+############################################################################## Helper Functions for Detrending (Start) #############################################################
+
+## Over a thousand iteration, this code chunk ~150 seconds in total and 0.15 per run
+def player_threshold(metric,threshold):
+
+    met_thresh_dict = {}
+    for k,d in batter_dict.items():
+        ini_dict = list(map(lambda x: {metric:x[metric]},d))
+        counter = collections.Counter()
+        for j in ini_dict:
+            counter.update(j)
+        if metric in dict(counter) and dict(counter)[metric] >= threshold:
+            met_thresh_dict[k] = d
+
+    return met_thresh_dict
+
+
+
+def find_interval(num, lst):
+
+    """
+    Function to return index of the largest element smaller than the given number
+    """
+    if num <= lst[0]:
+        return -1
+
+    if num >= lst[len(lst)-1]:
+        return len(lst) - 1
+
+
+    for i in range(0,len(lst)-1):
+        if lst[i] < num and lst[i+1] > num:
+            return i
+
+
+def map_Y(u, ytilde):
+    n = len(ytilde) - 1
+    sequence = np.arange(0, 1, 1/n).tolist() + [1]
+    pos = find_interval(u, sequence)
+    out = (n*u - (pos + 1) + 1) * (ytilde[(pos+1)] - ytilde[pos]) + ytilde[pos]
+    return out
+
+
+def map_pareto_vals_vec(war_talent, npop, alpha = 1.16):
+    n = len(war_talent)
+    if len(npop) == 1:
+        npop = [npop] * n
+    lst = []
+    for i in range(n):
+        lst.append(beta.cdf(pareto.cdf(war_talent[i], b=alpha, scale = 1),a = (i+1) + npop[i] - n, b = n+1 - (i+1)))
+
+    return lst
+
+def order_qempirical(vec, ytilde):
+    n = len(vec)
+    a = []
+    for i in range(n):
+        a.append(beta.ppf(vec[i], i+1, n-i))
+
+    out = []
+    for i in range(n):
+        out.append(map_Y(a[i], ytilde))
+
+    return out
+
+
+
+## Central Function for detrending which calls all the above helper function that are listed
+
+def career_talent(filtered_dict,WAR_batter_best, player_name, year_proj):
+
+    """
+    This function is the parent function that projects the talent of a particular player in a particular year
+
+    Parameters
+    ########################################################################################################
+
+    filtered_dict: dictionary of players which cross the threshold (for example: players having AB > 4000)
+    WAR_Batter_best: Dataframe that contains the scaled data set
+    player_name: Player namefor which you are running the projection
+    year_proj: Year for which you are running the projection
+    """
+
+    # Subsetting the dictionary for a particular player
+    filtered_dict_new = filtered_dict[player_name]
+
+    # Converting it to a dataframe
+    df = pd.DataFrame(filtered_dict_new).sort_values(by=['yearID']).reset_index(drop = True)
+
+    # Changing the player ID
+    df['playerID'] = df['playerID'].astype(str) + '_proj'
+
+    # Putting a counter for the number of iteration (we can use this counter later to determine the runtime of each loop)
+    # j = 0
+
+    # Creating an empty dataframe where we will be merging the rows
+    emp_df = pd.DataFrame()
+
+    # Iterating over all the years where the selected player has played baseball
+    for idx, year in df['yearID'].iteritems():
+        #j+=1
+
+        # subsetting the Normalized WAR Talent Dataset for the year in which we want to find the projection
+        batters_int = WAR_batter_best.loc[WAR_batter_best['yearID'] == year_proj]
+
+        # creating a vector with all the WAR values in the projection year
+        yy = batters_int.loc[:,'scale_WAR'].sort_values().reset_index(drop = True)
+
+        # Finding the length of the vector created above
+        n = len(yy)
+
+        # Creating a zero vector with one more cell than the vector with all the scaled WAR values
+        ytilde = [0] * (n+1)
+
+        # Changing the first value in ytilde (Extrapolation logic developed by Shen and Daniel)
+        ytilde[0] = yy[0] - 1/(yy[n-1] - yy[0])
+
+        # Changing the last value in ytilde
+        ytilde[n] = yy[n-1] + 1/(yy[n-1] - yy[n-4])
+
+        # Iterating over all the cells of ytilde and updating their values
+        # The updated ytilde is the new empirical distribution function of the WAR Talent
+        for i in range(1,n):
+            ytilde[i] = (yy[i]+yy[i-1])/2
+
+        batters_int = pd.concat([batters_int,df.loc[df['yearID'] == year]]).reset_index(drop = True)
+        batters_int['pops'][batters_int.shape[0]-1] = batters_int['pops'][0]
+        batters_int = batters_int.sort_values(by = ['WAR_talent']).reset_index(drop = True)
+        batters_int['foo'] = map_pareto_vals_vec(batters_int['WAR_talent'], batters_int['pops'])
+        batters_int['foo'] = batters_int['foo'].reset_index(drop = True)
+        batters_int['adj_WAR'] = order_qempirical(batters_int['foo'], ytilde)
+        del batters_int['foo']
+        batters_int = batters_int.loc[batters_int['playerID'] == df['playerID'].unique()[0]]
+        emp_df = pd.concat([emp_df, batters_int])
+        emp_df['target_year'] = year_proj
+
+    return emp_df
+
+############################################################################## Helper Functions for Detrending (End) #############################################################
 ############################################################################## Layout (Start) ######################################################################################
 
 layout = html.Div(id = "player_details_content",children = [
@@ -454,6 +604,35 @@ layout = html.Div(id = "player_details_content",children = [
 
                                         html.Br(),
                                         html.Br(),
+                                        dbc.FormGroup(
+                                            [
+                                                dbc.Label("Detrend Section"),
+                                                dbc.Checklist(
+                                                    options = [
+                                                        {"label":"Detrend Batting", "value":1},
+                                                        {"label":"Detrend Pitching", "value":2},
+                                                    ],
+                                                    value = [],
+                                                    id = "detrending_toggles",
+                                                    inline = False,
+                                                    switch = True,
+                                                    persistence = True,
+                                                    persistence_type = 'session'
+                                                )
+                                            ]
+                                        ),
+                                        html.Br(),
+                                        html.Label(["Projection Year",
+                                                    dcc.Dropdown(
+                                                    id = 'projection_year',
+                                                    options = time_dict,
+                                                    value = 2019,
+                                                    persistence = True,
+                                                    persistence_type = 'session',
+                                                    clearable = False
+                                                    )], style = {'width':'80%'}),
+                                        html.Br(),
+                                        html.Br(),
                                         dbc.Button("Submit Metrics to Update Table",color = "success",n_clicks = 0, id = 'submit_player_id'),
 
                                         html.Br(),
@@ -480,12 +659,50 @@ layout = html.Div(id = "player_details_content",children = [
                                  html.Br(),
                                  dbc.Row([html.P("Nap Lajoie", id="player_img_name", style = {'font-weight':'bold'})]),
                                  html.Br(),
-                                 dbc.Row([html.Img(id = "player_det_image",src="children",height=250)], justify="left"),
+                                 dbc.Row([
+                                    dbc.Col([html.Img(id = "player_det_image",src="children",height=250)], width = 3),
+                                    dbc.Col([dash_table.DataTable(
+                                                id = "player_bio_table_new",
+                                                columns = [{"name": "Attributes", "id": "bio_header"},
+                                                           {"name": "Details", "id": "bio_details"}],
+                                                style_cell={'textAlign': 'left'},
+                                                style_data = {'width':'50px'}
+                                    )], width = 5)
+                                 ],justify="left"),
                                  html.Br(),
                                  ##dbc.Row([html.P(id="player_det_txt", style = {'font-weight':'bold'})],justify="left"),
                                  dbc.Row([
+                                 dbc.Spinner(children = [
+                                 html.Div(id = "detrend_batting",
+                                         children = [html.P("Detrended Batting stats", id = "detrend_bat_title", style = {'font-weight':'bold'}),
+                                                     html.Br(),
+                                                     dash_table.DataTable(
+                                                     id = "bat_detrend_table",
+                                                     columns = [{'name': 'yearID', 'id': 'yearID'}, {'name': 'Proj. fWAR',
+                                                                                                     'id': 'Proj. fWAR',
+                                                                                                     "type":"numeric",
+                                                                                                     "format":Format(precision=2, scheme=Scheme.fixed)}],
+                                                     style_cell = {
+
+                                                         'textAlign':'left',
+                                                         'whiteSpace':'normal',
+                                                         'height':'auto',
+                                                         'maxWidth':'100px', 'minWidth':'100px'
+                                                     },
+                                                     style_data = {'width':'120px'},
+                                                     sort_action = "native",
+                                                     sort_mode = "multi",
+                                                     style_table = {'overflowX':'auto'},
+                                                     filter_action = "native"
+                                                     )], style= {'display': 'block'})
+                                 ], fullscreen = True)
+
+                                 ], justify = "left"),
+                                 html.Br(),
+                                 dbc.Row([
                                      html.Div(id="batting_det",
                                               children = [html.P("Batting",id="batting_txt", style = {'font-weight':'bold'}),
+
                                                           dash_table.DataTable(
                                                           id = 'bat_table',
                                                           style_cell={'textAlign': 'left',
@@ -500,8 +717,11 @@ layout = html.Div(id = "player_details_content",children = [
                                                           filter_action="native"
                                                                             ),
                                                           html.Br(),
+
                                                           html.P("Batting Totals",id="batting_tot_txt", style = {'font-weight':'bold'}),
+
                                                           html.Br(),
+
                                                           dash_table.DataTable(
                                                           id = 'bat_tot_table',
                                                           style_cell = {
@@ -509,8 +729,11 @@ layout = html.Div(id = "player_details_content",children = [
                                                           'whiteSpace':'normal',
                                                           'height':'auto'},
                                                           style_data = {'width':'120px'}),
+
                                                           html.Br(),
+
                                                           html.P("Batting Averages",id="batting_average_txt", style = {'font-weight':'bold'}),
+
                                                           dash_table.DataTable(
                                                           id = 'bat_avg_table',
                                                           style_cell = {
@@ -556,6 +779,12 @@ layout = html.Div(id = "player_details_content",children = [
 
 
 #################### Player Details call backs start ###############################################
+
+# Callback for the player bio table
+@app.callback(Output('player_bio_table_new','data'),[Input('player_name_det','value')])
+def update_player_bio(player_name):
+    df = player_bio.loc[(player_bio['player_name'] == player_name) & -pd.isnull(player_bio['bio_details']),['bio_header','bio_details']]
+    return(df.to_dict('records'))
 
 # Setting up the call back for updating the end year drop down start
 @app.callback(Output("start_year","options"),[Input("player_name_det","value")])
@@ -822,6 +1051,27 @@ def update_pitching_average(n_clicks,start_year,end_year,pit_met,player_name):
     return [res]
 
 
+
+# Detrending Batting Metrics Table (Body)
+@app.callback(Output('bat_detrend_table','data'),
+             [Input('detrending_toggles','value'),
+             Input('player_name_det','value'),
+             Input('start_year','value'),
+             Input('end_year','value'),
+             Input('projection_year','value')])
+def update_detrended_batting_table(selection, player_name, start_year, end_year, proj_year):
+    if 1 in selection:
+        filtered_dict = player_threshold('AB',0)
+        example = career_talent(filtered_dict, WAR_batter_best, player_name, int(proj_year))
+        example.rename(columns = {'adj_WAR':'Proj. fWAR'}, inplace = True)
+        example = example.loc[(example['yearID'] >= int(start_year)) & (example['yearID'] <= int(end_year)),['yearID','Proj. fWAR']]
+        example['Proj. fWAR'] = example['Proj. fWAR'].round(decimals = 2)
+        example['Proj. fWAR_str'] = example['Proj. fWAR'].apply(lambda x: str(x))
+        return(example.to_dict('records'))
+    else:
+        return None
+
+
 # Depnding on whether the player selected is a batter or pitcher, the correspoing table will appear based on the two callbacks below
 @app.callback(
    Output('batting_det','style'),
@@ -840,5 +1090,16 @@ def show_hide_element(selection):
         return {'display': 'block'}
     else:
         return {'display': 'none'}
+
+# The call back below is for adjusting the detrending of batting statistic
+@app.callback(
+    Output('detrend_batting','style'),
+    [Input('detrending_toggles','value')])
+def show_hide_batting_detrending(selection):
+    if 1 in selection:
+        return {'display': 'block'}
+    else:
+        return {'display': 'none'}
+
 
 #################### Player Details call backs end ###############################################

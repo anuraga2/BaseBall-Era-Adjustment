@@ -1,0 +1,1 @@
+"C:\Program Files\R\R-4.0.3\bin\R.exe" CMD BATCH D:\UIUC\Era Adjustment\EraAdjustmentApp\MultiplePageApp\apps\SampRCode.R
