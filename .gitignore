@@ -1,0 +1,7 @@
+# Images #
+##########
+*.png
+
+# Jupyter Notebooks #
+##########
+*.ipynb
